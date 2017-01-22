@@ -5,6 +5,7 @@ const {goodFiles, badFiles} = require('./node-good-bad-files');
 const vm = require('vm');
 const jsdom = require('jsdom').jsdom;
 const CY = require('cyclonejs');
+const Worker = require('webworker');
 
 // CONFIG
 const vmTimeout = 40000; // Time until we give up on the vm (increasing to 40000 didn't make a difference on coverage in earlier versions)
@@ -151,11 +152,16 @@ function readAndEvaluate (jsFiles, initial = '', ending = '', item = 0) {
                         }
                         _postMessage(...args);
                     };
+                    window.Worker = Worker({
+                        relativePathType: 'file', // Todo: We need to change this to "url" when implemented
+                        basePath: path.join(__dirname, '../web-platform-tests', 'IndexedDB') // Todo: We need to change this to our server's base URL when implemented
+                        // basePath: path.join(__dirname, 'js')
+                    });
                     shimNS.window = window;
 
                     // Should only pass in safe objects
                     const sandboxObj = {
-                        // console,
+                        console,
                         shimNS
                     };
                     vm.runInNewContext(allContent, sandboxObj, {
@@ -192,6 +198,8 @@ function readAndEvaluateFiles (err, jsFiles) {
         // Hard-coding problematic files for testing
         // jsFiles = jsFiles.slice(0, 3);
         // jsFiles = ['idbindex-rename.js', 'idbobjectstore-rename-abort.js', 'idbobjectstore-rename-store.js', 'transaction-abort-index-metadata-revert.js', 'transaction-abort-object-store-metadata-revert.js']; // Not running tests
+        // jsFiles = ['idbcursor-continuePrimaryKey-exception-order.js'];
+        jsFiles = ['idb_webworkers.js'];
 
         /*
         Current test statuses with 0 files excluded (vmTimeout = 40000):

@@ -20,6 +20,8 @@
                 // Already added
                 'clearTimeout', 'setTimeout',
                 'addEventListener', 'document',
+                // Let's allow us to override the jsdom console with that in the main script
+                'console',
                 // Not in Chrome (and at least log should not become a global as used in test scripts)
                 'scrollTop', 'scrollLeft', 'createPopup', 'log'
             ].includes(prop)) {

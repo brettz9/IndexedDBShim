@@ -30,12 +30,13 @@
     "w3c-old": "grunt clean-w3c-old && grunt w3c-old && grunt clean-w3c-old",
     "tests-polyfill": "grunt clean-polyfill && npm run fake && npm run mock && npm run w3c-old && browserify-test -t [ babelify --presets es2015 ] tests-polyfill/**/*.js",
     "w3c": "npm run w3c-build && npm run w3c-test",
-    "w3c-test": "node test-support/node-indexeddbshim-test && grunt clean-w3c",
-    "w3c-good": "npm run w3c-build && node test-support/node-indexeddbshim-test good && grunt clean-w3c",
-    "w3c-bad": "npm run w3c-build && node test-support/node-indexeddbshim-test bad && grunt clean-w3c",
-    "w3c-good-test": "node test-support/node-indexeddbshim-test good && grunt clean-w3c",
-    "w3c-bad-test": "node test-support/node-indexeddbshim-test bad && grunt clean-w3c"
+    "w3c-test": "node test-support/node-idb-test && grunt clean-w3c",
+    "w3c-good": "npm run w3c-build && node test-support/node-idb-test good && grunt clean-w3c",
+    "w3c-bad": "npm run w3c-build && node test-support/node-idb-test bad && grunt clean-w3c",
+    "w3c-good-test": "node test-support/node-idb-test good && grunt clean-w3c",
+    "w3c-bad-test": "node test-support/node-idb-test bad && grunt clean-w3c"
   },
+  "files": ["dist"],
   "repository": {
     "type": "git",
     "url": "git://github.com/axemclion/IndexedDBShim.git"
@@ -63,10 +64,10 @@
     "chai": "3.5.0",
     "cheerio": "0.22.0",
     "colors": "1.1.2",
-    "cyclonejs": "^1.1.4",
-    "eslint": "3.13.1",
+    "cyclonejs": "1.1.4",
+    "eslint": "3.14.0",
     "eslint-config-standard": "6.2.1",
-    "eslint-plugin-compat": "^1.0.0",
+    "eslint-plugin-compat": "1.0.1",
     "eslint-plugin-promise": "3.4.0",
     "eslint-plugin-standard": "2.0.1",
     "eventtarget": "https://github.com/brettz9/eventdispatcher.js#early-late-listeners-noproxy",
@@ -89,7 +90,8 @@
     "request": "2.79.0",
     "sinon": "1.17.7",
     "sync-promise": "https://github.com/brettz9/sync-promise#full-sync-missing-promise-features",
-    "w3c-blob": "0.0.1"
+    "w3c-blob": "0.0.1",
+    "webworker": "https://github.com/brettz9/node-webworker#windows3"
   },
   "bundleDependencies": [],
   "license": "Apache-2.0",
