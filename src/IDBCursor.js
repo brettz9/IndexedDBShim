@@ -508,42 +508,50 @@ IDBCursor.prototype.update = function (valueToUpdate) {
         throw createDOMException('InvalidStateError', 'This cursor method cannot be called when the key only flag has been set.');
     }
     util.throwIfNotClonable(valueToUpdate, 'The data to be updated could not be cloned by the internal structured cloning algorithm.');
-    if (me.__store.keyPath !== null) {
-        const evaluatedKey = me.__store.__validateKeyAndValue(valueToUpdate);
-        if (me.primaryKey !== evaluatedKey) {
-            throw createDOMException('DataError', 'The key of the supplied value to `update` is not equal to the cursor\'s effective key');
-        }
-    }
-    return me.__store.transaction.__addToTransactionQueue(function cursorUpdate (tx, args, success, error) {
-        const key = me.key;
-        const primaryKey = me.primaryKey;
-        const store = me.__store;
-        Sca.encode(valueToUpdate, function (encoded) {
-            const value = Sca.decode(encoded);
-            Sca.encode(value, function (encoded) {
-                // First try to delete if the record exists
-                Key.convertValueToKey(primaryKey);
-                const sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(store.name) + ' WHERE key = ?';
-                const encodedPrimaryKey = Key.encode(primaryKey);
-                CFG.DEBUG && console.log(sql, encoded, key, primaryKey, encodedPrimaryKey);
+    function addToQueue () {
+        me.__store.transaction.__pushToQueue(request, function cursorUpdate (tx, args, success, error) {
+            const key = me.key;
+            const primaryKey = me.primaryKey;
+            const store = me.__store;
+            Sca.encode(valueToUpdate, function (encoded) {
+                const value = Sca.decode(encoded);
+                Sca.encode(value, function (encoded) {
+                    // First try to delete if the record exists
+                    Key.convertValueToKey(primaryKey);
+                    const sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(store.name) + ' WHERE key = ?';
+                    const encodedPrimaryKey = Key.encode(primaryKey);
+                    CFG.DEBUG && console.log(sql, encoded, key, primaryKey, encodedPrimaryKey);
 
-                tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
-                    CFG.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
+                    tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
+                        CFG.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
 
-                    store.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
-                        store.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function (...args) {
-                            store.__cursors.forEach((cursor) => {
-                                cursor.__invalidateCache(); // Delete and add
-                            });
-                            success(...args);
-                        }, error);
-                    }, function (tx, err) {
-                        error(err);
+                        store.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
+                            store.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function (...args) {
+                                store.__cursors.forEach((cursor) => {
+                                    cursor.__invalidateCache(); // Delete and add
+                                });
+                                success(...args);
+                            }, error);
+                        }, function (tx, err) {
+                            error(err);
+                        });
                     });
                 });
             });
         });
-    }, undefined, me);
+    }
+    const request = me.__store.transaction.__createRequest(me);
+    if (me.__store.keyPath !== null) {
+        me.__store.__validateKeyAndValue(valueToUpdate, undefined, function (evaluatedKey) {
+            if (me.primaryKey !== evaluatedKey) {
+                throw createDOMException('DataError', 'The key of the supplied value to `update` is not equal to the cursor\'s effective key');
+            }
+            addToQueue();
+        });
+    } else {
+        addToQueue();
+    }
+    return request;
 };
 
 IDBCursor.prototype['delete'] = function () {

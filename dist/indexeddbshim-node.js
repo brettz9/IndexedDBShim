@@ -18115,42 +18115,50 @@ IDBCursor.prototype.update = function (valueToUpdate) {
         throw (0, _DOMException.createDOMException)('InvalidStateError', 'This cursor method cannot be called when the key only flag has been set.');
     }
     util.throwIfNotClonable(valueToUpdate, 'The data to be updated could not be cloned by the internal structured cloning algorithm.');
-    if (me.__store.keyPath !== null) {
-        var evaluatedKey = me.__store.__validateKeyAndValue(valueToUpdate);
-        if (me.primaryKey !== evaluatedKey) {
-            throw (0, _DOMException.createDOMException)('DataError', 'The key of the supplied value to `update` is not equal to the cursor\'s effective key');
-        }
-    }
-    return me.__store.transaction.__addToTransactionQueue(function cursorUpdate(tx, args, success, error) {
-        var key = me.key;
-        var primaryKey = me.primaryKey;
-        var store = me.__store;
-        _Sca2.default.encode(valueToUpdate, function (encoded) {
-            var value = _Sca2.default.decode(encoded);
-            _Sca2.default.encode(value, function (encoded) {
-                // First try to delete if the record exists
-                _Key2.default.convertValueToKey(primaryKey);
-                var sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(store.name) + ' WHERE key = ?';
-                var encodedPrimaryKey = _Key2.default.encode(primaryKey);
-                _CFG2.default.DEBUG && console.log(sql, encoded, key, primaryKey, encodedPrimaryKey);
+    function addToQueue() {
+        me.__store.transaction.__pushToQueue(request, function cursorUpdate(tx, args, success, error) {
+            var key = me.key;
+            var primaryKey = me.primaryKey;
+            var store = me.__store;
+            _Sca2.default.encode(valueToUpdate, function (encoded) {
+                var value = _Sca2.default.decode(encoded);
+                _Sca2.default.encode(value, function (encoded) {
+                    // First try to delete if the record exists
+                    _Key2.default.convertValueToKey(primaryKey);
+                    var sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(store.name) + ' WHERE key = ?';
+                    var encodedPrimaryKey = _Key2.default.encode(primaryKey);
+                    _CFG2.default.DEBUG && console.log(sql, encoded, key, primaryKey, encodedPrimaryKey);
 
-                tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
-                    _CFG2.default.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
+                    tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
+                        _CFG2.default.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
 
-                    store.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
-                        store.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function () {
-                            store.__cursors.forEach(function (cursor) {
-                                cursor.__invalidateCache(); // Delete and add
-                            });
-                            success.apply(undefined, arguments);
-                        }, error);
-                    }, function (tx, err) {
-                        error(err);
+                        store.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
+                            store.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function () {
+                                store.__cursors.forEach(function (cursor) {
+                                    cursor.__invalidateCache(); // Delete and add
+                                });
+                                success.apply(undefined, arguments);
+                            }, error);
+                        }, function (tx, err) {
+                            error(err);
+                        });
                     });
                 });
             });
         });
-    }, undefined, me);
+    }
+    var request = me.__store.transaction.__createRequest(me);
+    if (me.__store.keyPath !== null) {
+        me.__store.__validateKeyAndValue(valueToUpdate, undefined, function (evaluatedKey) {
+            if (me.primaryKey !== evaluatedKey) {
+                throw (0, _DOMException.createDOMException)('DataError', 'The key of the supplied value to `update` is not equal to the cursor\'s effective key');
+            }
+            addToQueue();
+        });
+    } else {
+        addToQueue();
+    }
+    return request;
 };
 
 IDBCursor.prototype['delete'] = function () {
@@ -20017,40 +20025,44 @@ IDBObjectStore.__deleteObjectStore = function (db, store) {
  * @param {*} key       Used for out-of-line keys
  * @private
  */
-IDBObjectStore.prototype.__validateKeyAndValue = function (value, key) {
+IDBObjectStore.prototype.__validateKeyAndValue = function (value, key, cb) {
     var me = this;
     if (me.keyPath !== null) {
         if (key !== undefined) {
             throw (0, _DOMException.createDOMException)('DataError', 'The object store uses in-line keys and the key parameter was provided', me);
         }
         util.throwIfNotClonable(value, 'The data to be stored could not be cloned by the internal structured cloning algorithm.');
-        key = _Key2.default.evaluateKeyPathOnValue(value, me.keyPath);
-        if (key === undefined) {
-            if (me.autoIncrement) {
-                // Todo: Check whether this next check is a problem coming from `IDBCursor.update()`
-                if (!util.isObj(value)) {
-                    // Although steps for storing will detect this, we want to throw synchronously for `add`/`put`
-                    throw (0, _DOMException.createDOMException)('DataError', 'KeyPath was specified, but value was not an object');
+        _Sca2.default.encode(value, function (encoded) {
+            value = _Sca2.default.decode(encoded);
+            key = _Key2.default.evaluateKeyPathOnValue(value, me.keyPath);
+            if (key === undefined) {
+                if (me.autoIncrement) {
+                    // Todo: Check whether this next check is a problem coming from `IDBCursor.update()`
+                    if (!util.isObj(value)) {
+                        // Although steps for storing will detect this, we want to throw synchronously for `add`/`put`
+                        throw (0, _DOMException.createDOMException)('DataError', 'KeyPath was specified, but value was not an object');
+                    }
+                    // A key will be generated
+                    return undefined;
                 }
-                // A key will be generated
-                return undefined;
+                throw (0, _DOMException.createDOMException)('DataError', 'Could not evaluate a key from keyPath');
             }
-            throw (0, _DOMException.createDOMException)('DataError', 'Could not evaluate a key from keyPath');
-        }
-        _Key2.default.convertValueToKey(key);
-    } else {
-        if (key === undefined) {
-            if (me.autoIncrement) {
-                // A key will be generated
-                return undefined;
-            }
-            throw (0, _DOMException.createDOMException)('DataError', 'The object store uses out-of-line keys and has no key generator and the key parameter was not provided. ', me);
-        }
-        _Key2.default.convertValueToKey(key);
-        util.throwIfNotClonable(value, 'The data to be stored could not be cloned by the internal structured cloning algorithm.');
+            _Key2.default.convertValueToKey(key);
+            cb(key);
+        });
+        return;
     }
+    if (key === undefined) {
+        if (me.autoIncrement) {
+            // A key will be generated
+            return undefined;
+        }
+        throw (0, _DOMException.createDOMException)('DataError', 'The object store uses out-of-line keys and has no key generator and the key parameter was not provided. ', me);
+    }
+    _Key2.default.convertValueToKey(key);
+    util.throwIfNotClonable(value, 'The data to be stored could not be cloned by the internal structured cloning algorithm.');
 
-    return key;
+    cb(key);
 };
 
 /**
@@ -20257,22 +20269,23 @@ IDBObjectStore.prototype.add = function (value /* , key */) {
     }
     _IDBTransaction2.default.__assertActive(me.transaction);
     me.transaction.__assertWritable();
-    this.__validateKeyAndValue(value, key);
 
     var request = me.transaction.__createRequest(me);
-    me.transaction.__pushToQueue(request, function objectStoreAdd(tx, args, success, error) {
-        _Sca2.default.encode(value, function (encoded) {
-            value = _Sca2.default.decode(encoded);
-            me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
-                _Sca2.default.encode(value, function (encoded) {
-                    me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function () {
-                        me.__cursors.forEach(function (cursor) {
-                            cursor.__invalidateCache(); // Add
-                        });
-                        success.apply(undefined, arguments);
-                    }, error);
-                });
-            }, error);
+    this.__validateKeyAndValue(value, key, function (key) {
+        me.transaction.__pushToQueue(request, function objectStoreAdd(tx, args, success, error) {
+            _Sca2.default.encode(value, function (encoded) {
+                value = _Sca2.default.decode(encoded);
+                me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
+                    _Sca2.default.encode(value, function (encoded) {
+                        me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function () {
+                            me.__cursors.forEach(function (cursor) {
+                                cursor.__invalidateCache(); // Add
+                            });
+                            success.apply(undefined, arguments);
+                        }, error);
+                    });
+                }, error);
+            });
         });
     });
     return request;
@@ -20292,31 +20305,32 @@ IDBObjectStore.prototype.put = function (value /*, key */) {
     }
     _IDBTransaction2.default.__assertActive(me.transaction);
     me.transaction.__assertWritable();
-    me.__validateKeyAndValue(value, key);
 
     var request = me.transaction.__createRequest(me);
-    me.transaction.__pushToQueue(request, function objectStorePut(tx, args, success, error) {
-        _Sca2.default.encode(value, function (encoded) {
-            value = _Sca2.default.decode(encoded);
-            me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
-                _Sca2.default.encode(value, function (encoded) {
-                    // First try to delete if the record exists
-                    _Key2.default.convertValueToKey(primaryKey);
-                    var sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(me.name) + ' WHERE key = ?';
-                    var encodedPrimaryKey = _Key2.default.encode(primaryKey);
-                    tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
-                        _CFG2.default.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
-                        me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function () {
-                            me.__cursors.forEach(function (cursor) {
-                                cursor.__invalidateCache(); // Add
-                            });
-                            success.apply(undefined, arguments);
-                        }, error);
-                    }, function (tx, err) {
-                        error(err);
+    me.__validateKeyAndValue(value, key, function (key) {
+        me.transaction.__pushToQueue(request, function objectStorePut(tx, args, success, error) {
+            _Sca2.default.encode(value, function (encoded) {
+                value = _Sca2.default.decode(encoded);
+                me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
+                    _Sca2.default.encode(value, function (encoded) {
+                        // First try to delete if the record exists
+                        _Key2.default.convertValueToKey(primaryKey);
+                        var sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(me.name) + ' WHERE key = ?';
+                        var encodedPrimaryKey = _Key2.default.encode(primaryKey);
+                        tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
+                            _CFG2.default.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
+                            me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function () {
+                                me.__cursors.forEach(function (cursor) {
+                                    cursor.__invalidateCache(); // Add
+                                });
+                                success.apply(undefined, arguments);
+                            }, error);
+                        }, function (tx, err) {
+                            error(err);
+                        });
                     });
-                });
-            }, error);
+                }, error);
+            });
         });
     });
     return request;

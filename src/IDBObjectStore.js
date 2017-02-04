@@ -195,39 +195,59 @@ IDBObjectStore.__deleteObjectStore = function (db, store) {
  * @param {*} key       Used for out-of-line keys
  * @private
  */
-IDBObjectStore.prototype.__validateKeyAndValue = function (value, key) {
+IDBObjectStore.prototype.__validateKeyAndValue = function (value, key, cb) {
     const me = this;
     if (me.keyPath !== null) {
         if (key !== undefined) {
             throw createDOMException('DataError', 'The object store uses in-line keys and the key parameter was provided', me);
         }
+        console.log('inspecting value');
+        console.log(value);
+        try {
+            value && typeof value === 'object' && value.throws;
+        } catch (err) {
+            console.log('gotcha');
+            console.log(err);
+        }
         util.throwIfNotClonable(value, 'The data to be stored could not be cloned by the internal structured cloning algorithm.');
-        key = Key.evaluateKeyPathOnValue(value, me.keyPath);
-        if (key === undefined) {
-            if (me.autoIncrement) {
-                // Todo: Check whether this next check is a problem coming from `IDBCursor.update()`
-                if (!util.isObj(value)) { // Although steps for storing will detect this, we want to throw synchronously for `add`/`put`
-                    throw createDOMException('DataError', 'KeyPath was specified, but value was not an object');
+        Sca.encode(value, function (encoded) {
+            value = Sca.decode(encoded);
+            try {
+                value && typeof value === 'object' && value.throws;
+            } catch (err) {
+                console.log('gotcha2');
+                console.log(err);
+            }
+            key = Key.evaluateKeyPathOnValue(value, me.keyPath);
+            if (key === undefined) {
+                if (me.autoIncrement) {
+                    // Todo: Check whether this next check is a problem coming from `IDBCursor.update()`
+                    if (!util.isObj(value)) { // Although steps for storing will detect this, we want to throw synchronously for `add`/`put`
+                        throw createDOMException('DataError', 'KeyPath was specified, but value was not an object');
+                    }
+                    // A key will be generated
+                    cb(undefined);
+                    return;
                 }
-                // A key will be generated
-                return undefined;
+                throw createDOMException('DataError', 'Could not evaluate a key from keyPath');
             }
-            throw createDOMException('DataError', 'Could not evaluate a key from keyPath');
-        }
-        Key.convertValueToKey(key);
-    } else {
-        if (key === undefined) {
-            if (me.autoIncrement) {
-                // A key will be generated
-                return undefined;
-            }
-            throw createDOMException('DataError', 'The object store uses out-of-line keys and has no key generator and the key parameter was not provided. ', me);
-        }
-        Key.convertValueToKey(key);
-        util.throwIfNotClonable(value, 'The data to be stored could not be cloned by the internal structured cloning algorithm.');
+            Key.convertValueToKey(key);
+            cb(key);
+        });
+        return;
     }
+    if (key === undefined) {
+        if (me.autoIncrement) {
+            // A key will be generated
+            cb(undefined);
+            return;
+        }
+        throw createDOMException('DataError', 'The object store uses out-of-line keys and has no key generator and the key parameter was not provided. ', me);
+    }
+    Key.convertValueToKey(key);
+    util.throwIfNotClonable(value, 'The data to be stored could not be cloned by the internal structured cloning algorithm.');
 
-    return key;
+    cb(key);
 };
 
 /**
@@ -439,22 +459,23 @@ IDBObjectStore.prototype.add = function (value /* , key */) {
     }
     IDBTransaction.__assertActive(me.transaction);
     me.transaction.__assertWritable();
-    this.__validateKeyAndValue(value, key);
 
     const request = me.transaction.__createRequest(me);
-    me.transaction.__pushToQueue(request, function objectStoreAdd (tx, args, success, error) {
-        Sca.encode(value, function (encoded) {
-            value = Sca.decode(encoded);
-            me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
-                Sca.encode(value, function (encoded) {
-                    me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function (...args) {
-                        me.__cursors.forEach((cursor) => {
-                            cursor.__invalidateCache(); // Add
-                        });
-                        success(...args);
-                    }, error);
-                });
-            }, error);
+    this.__validateKeyAndValue(value, key, function (key) {
+        me.transaction.__pushToQueue(request, function objectStoreAdd (tx, args, success, error) {
+            Sca.encode(value, function (encoded) {
+                value = Sca.decode(encoded);
+                me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
+                    Sca.encode(value, function (encoded) {
+                        me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function (...args) {
+                            me.__cursors.forEach((cursor) => {
+                                cursor.__invalidateCache(); // Add
+                            });
+                            success(...args);
+                        }, error);
+                    });
+                }, error);
+            });
         });
     });
     return request;
@@ -474,31 +495,32 @@ IDBObjectStore.prototype.put = function (value /*, key */) {
     }
     IDBTransaction.__assertActive(me.transaction);
     me.transaction.__assertWritable();
-    me.__validateKeyAndValue(value, key);
 
     const request = me.transaction.__createRequest(me);
-    me.transaction.__pushToQueue(request, function objectStorePut (tx, args, success, error) {
-        Sca.encode(value, function (encoded) {
-            value = Sca.decode(encoded);
-            me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
-                Sca.encode(value, function (encoded) {
-                    // First try to delete if the record exists
-                    Key.convertValueToKey(primaryKey);
-                    const sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(me.name) + ' WHERE key = ?';
-                    const encodedPrimaryKey = Key.encode(primaryKey);
-                    tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
-                        CFG.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
-                        me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function (...args) {
-                            me.__cursors.forEach((cursor) => {
-                                cursor.__invalidateCache(); // Add
-                            });
-                            success(...args);
-                        }, error);
-                    }, function (tx, err) {
-                        error(err);
+    me.__validateKeyAndValue(value, key, function (key) {
+        me.transaction.__pushToQueue(request, function objectStorePut (tx, args, success, error) {
+            Sca.encode(value, function (encoded) {
+                value = Sca.decode(encoded);
+                me.__deriveKey(tx, value, key, function (primaryKey, useNewForAutoInc) {
+                    Sca.encode(value, function (encoded) {
+                        // First try to delete if the record exists
+                        Key.convertValueToKey(primaryKey);
+                        const sql = 'DELETE FROM ' + util.escapeStoreNameForSQL(me.name) + ' WHERE key = ?';
+                        const encodedPrimaryKey = Key.encode(primaryKey);
+                        tx.executeSql(sql, [util.escapeSQLiteStatement(encodedPrimaryKey)], function (tx, data) {
+                            CFG.DEBUG && console.log('Did the row with the', primaryKey, 'exist? ', data.rowsAffected);
+                            me.__insertData(tx, encoded, value, primaryKey, key, useNewForAutoInc, function (...args) {
+                                me.__cursors.forEach((cursor) => {
+                                    cursor.__invalidateCache(); // Add
+                                });
+                                success(...args);
+                            }, error);
+                        }, function (tx, err) {
+                            error(err);
+                        });
                     });
-                });
-            }, error);
+                }, error);
+            });
         });
     });
     return request;
