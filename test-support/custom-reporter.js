@@ -5,7 +5,7 @@
     /*
     ShimEvent, ShimCustomEvent, ShimEventTarget, ShimDOMException,
     Event, CustomEvent, EventTarget, DOMException,
-    XMLHttpRequest, URL, URLSearchParams, postMessage, Worker,
+    XMLHttpRequest, URL, URLSearchParams, postMessage, Worker, ServiceWorker, SharedWorker,
     _core,_globalProxy,__timers,_top,_parent,_frameElement,_document,_sessionHistory,_currentSessionHistoryEntryIndex,_length,_virtualConsole,
     length,window,frameElement,frames,self,parent,top,document,location,history,navigator,addEventListener,removeEventListener,dispatchEvent,setTimeout,setInterval,clearInterval,clearTimeout,
     __stopAllTimers,
@@ -34,6 +34,7 @@
         this[prop] = shimNS.window[prop];
     }, this);
     // shimIndexedDB.__debug(true);
+    window = this; // This gets negated by the above setting of `this` despite that we earlier set `window` as an alias of `this`
 
     const colors = shimNS.colors;
     const theme = {

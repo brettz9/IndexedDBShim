@@ -145,8 +145,11 @@ function readAndEvaluate (jsFiles, initial = '', ending = '', workers = false, i
         excluded = workers
             // Keep these arrays even if made empty for sake of any new breaking W3C tests
             ? [
-                '_interface-objects-003.js',
-                '_interface-objects-004.js'
+                '_interface-objects-001.worker.js',
+                '_interface-objects-002.worker.js',
+                '_service-worker-indexeddb.https.js'
+                // '_interface-objects-003.js',
+                // '_interface-objects-004.js'
             ] : [
                 'bindings-inject-key.js',
                 'keypath-exceptions.js'
@@ -200,7 +203,7 @@ function readAndEvaluate (jsFiles, initial = '', ending = '', workers = false, i
 
                 // Build the window each time for test safety
                 const rootPath = path.join(__dirname, '../web-platform-tests');
-                const basePath = path.join(rootPath, 'IndexedDB');
+                const basePath = path.join(rootPath, 'IndexedDB', shimNS.fileName);
                 /*
                 // Todo: We aren't really using this now as it doesn't help
                 //    with XMLHttpRequest; it also changes path of
@@ -296,6 +299,22 @@ function readAndEvaluate (jsFiles, initial = '', ending = '', workers = false, i
                                 relativePathType: 'file', // Todo: We need to change this to "url" when implemented
                                 // Todo: We might auto-detect this by looking at window.location
                                 basePath, // Todo: We need to change this to our server's base URL when implemented
+                                // basePath: path.join(__dirname, 'js')
+                                rootPath
+                            });
+                            window.ServiceWorker = Worker({
+                                workerType: 'service',
+                                relativePathType: 'file', // Todo: We need to change this to "url" when implemented
+                                // Todo: We might auto-detect this by looking at window.location
+                                basePath, // Todo: We need to change this to our server's base URL when implemented
+                                // basePath: path.join(__dirname, 'js')
+                                rootPath
+                            });
+                            window.SharedWorker = Worker({
+                                workerType: 'shared',
+                                relativePathType: 'file', // Todo: We need to change this to "url" when implemented
+                                // Todo: We might auto-detect this by looking at window.location
+                                basePath: path.join(__dirname, 'js', shimNS.fileName), // Todo: We need to change this to our server's base URL when implemented
                                 // basePath: path.join(__dirname, 'js')
                                 rootPath
                             });

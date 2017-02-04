@@ -176,6 +176,9 @@ module.exports = function (workerConfig) {
             // Process incoming messages with handleMessage()
             msgStream.addListener('msg', handleMessage);
         });
+        if (workerConfig.workerType === 'shared') {
+            self.port = self;
+        }
 
         // Begin worker execution
         //
@@ -196,7 +199,8 @@ module.exports = function (workerConfig) {
                     workerConfig.relativePathType,
                     workerConfig.basePath,
                     workerConfig.rootPath,
-                    workerConfig.origin
+                    workerConfig.origin,
+                    workerConfig.workerType
                 ];
                 if (workerConfig.args) {
                     if (Array.isArray(workerConfig.args)) {
@@ -276,6 +280,7 @@ module.exports = function (workerConfig) {
             });
         };
 
+
         // The primary message handling function for the worker.
         //
         // This is only invoked after handshaking has occurred.
@@ -304,15 +309,16 @@ module.exports = function (workerConfig) {
                 break;
 
             case wwutil.MSGTYPE_USER:
-                if (self.onmessage || eventHandlers['message'].length > 0) {
+                const port = (workerConfig.workerType === 'shared') ? self.port : self;
+                if (port.onmessage || eventHandlers['message'].length > 0) {
                     const e = { data: msg[1] };
 
                     if (fd) {
                         e.fd = fd;
                     }
 
-                    if (self.onmessage) {
-                        self.onmessage(e);
+                    if (port.onmessage) {
+                        port.onmessage(e);
                     }
 
                     for (let i = 0; i < eventHandlers['message'].length; i++) {

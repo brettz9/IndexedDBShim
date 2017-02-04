@@ -39,7 +39,8 @@ try {
 
 const workerCtx = {};
 const sockPath = process.argv[2];
-const workerURL = process.argv[3];
+const workerURL = process.argv[3].replace(/#.*$/, '').replace(/\/$/, '');
+console.log(workerURL);
 const scriptLoc = new wwutil.WorkerLocation(workerURL);
 // Connect to the parent process
 const ws = new WebSocket('ws+unix://' + sockPath);
@@ -55,7 +56,8 @@ const workerConfig = {
                                         //       relative paths will be relative to `basePath`; absolute paths will be relative to `rootPath`
     basePath: process.argv[8] === 'false' ? false : process.argv[8], // The base path for pathType="url" defaults to `localhost`; the base path for pathType="file"; defaults to the current working directory; if `false`, will throw upon relative paths
     rootPath: process.argv[9],
-    origin: process.argv[10] // Used for the `Origin` header (may be `null`); if `*` will cause cross-origin restrictions to be ignored
+    origin: process.argv[10], // Used for the `Origin` header (may be `null`); if `*` will cause cross-origin restrictions to be ignored
+    workerType: process.argv[11]
 };
 
 // Catch exceptions
@@ -179,7 +181,8 @@ const workerConfig = {
                                         //       relative paths will be relative to `basePath`
     basePath: process.argv[8], // The base path for pathType="url" defaults to `localhost`; the base path for pathType="file" defaults to the current working directory; if `false`, will throw upon relative paths
     rootPath: process.argv[9],
-    origin: process.argv[10] // Used for the `Origin` header (may be `null`); if `*` will cause cross-origin restrictions to be ignored
+    origin: process.argv[10], // Used for the `Origin` header (may be `null`); if `*` will cause cross-origin restrictions to be ignored
+    workerType: process.argv[11]
 };
 */
 
@@ -217,10 +220,21 @@ workerCtx.postMessage = function (msg) {
 };
 workerCtx.WorkerGlobalScope = workerCtx;
 
-// Todo: In place of this, allow conditionally `SharedWorkerGlobalScope`, or `ServiceWorkerGlobalScope`
-workerCtx.DedicatedWorkerGlobalScope = workerCtx;
+let workerGlobal;
+switch (workerConfig.workerType) {
+    case 'shared':
+        workerGlobal = 'SharedWorkerGlobalScope';
+        break;
+    case 'service':
+        workerGlobal = 'ServiceWorkerGlobalScope';
+        break;
+    case 'dedicated': default:
+        workerGlobal = 'DedicatedWorkerGlobalScope';
+        break;
+}
+workerCtx[workerGlobal] = workerCtx;
 // This was needed for testharness' `instanceof` check which requires it to be callable: `self instanceof DedicatedWorkerGlobalScope`
-workerCtx.DedicatedWorkerGlobalScope[Symbol.hasInstance] = function (inst) { return inst.WorkerGlobalScope && !inst.SharedWorkerGlobalScope && !inst.ServiceWorkerGlobalScope; };
+workerCtx[workerGlobal][Symbol.hasInstance] = function (inst) { return inst[workerGlobal]; };
 
 workerCtx.location = scriptLoc;
 workerCtx.closing = false;
