@@ -145,10 +145,64 @@ IDBDatabase.prototype.deleteObjectStore = function (storeName) {
 };
 
 IDBDatabase.prototype.close = function () {
-    if (!(this instanceof IDBDatabase)) {
+    const me = this;
+    if (!(me instanceof IDBDatabase)) {
         throw new TypeError('Illegal invocation');
     }
-    this.__closed = true;
+    let erred = false;
+    let ct = 0;
+    function checkClosed () {
+        if (!erred && ct === me.__transactions.length) {
+            if (me.__forceClosePending) {
+                setTimeout(checkClosed, 350);
+                return;
+            }
+            // Todo __forceClose: unblock any pending `upgradeneeded` or `deleteDatabase` calls
+            const evt = createEvent('close');
+            setTimeout(() => {
+                delete me.__forcedMessage;
+                delete me.__forced;
+                me.dispatchEvent(evt);
+            });
+        }
+    }
+    if (!me.__closed) { // Avoid recursing
+        me.__closed = true;
+        const nodewebsqlDb = me.__db._db;
+        if (!nodewebsqlDb || // In a browser where we can't listen for close errors
+            !nodewebsqlDb._db // User is using some custom node-websql implementation where we don't know how to listen for close errors
+        ) {
+            me.__forceClosePending = false;
+        } else {
+            // `__db` is node-websql's `WebSQLDatabase` instance; the first `_db` is node-websql's reference to
+            //   its `SQLiteDatabase` class, and the second is to the underlying `sqlite3.Database` instance
+            nodewebsqlDb._db.close(function (err) { // Access the underlying SQLite3 database instance and close: https://github.com/mapbox/node-sqlite3/wiki/API#databaseclosecallback
+                if (err) {
+                    erred = true;
+                    if (!me.__forced) {
+                        console.log('The close attempt erred so treating as a force close.');
+                        me.__forceClose(err.message);
+                        // We're already inside the close listener so we need to disable
+                        //   subsequent (async-triggered) checks by `__forceClose`, permitting it to send out a final close event
+                        me.__forceClosePending = false;
+                    } else {
+                        console.log('The forced close request itself erred. No further action being taken though AbortError and close events will continue if not yet complete.');
+                    }
+                } else {
+                    me.__forceClosePending = false;
+                }
+            });
+        }
+    }
+    if (me.__forced) {
+        me.__transactions.forEach(function (trans) {
+            trans.on__abort = function () {
+                ct++;
+                checkClosed();
+            };
+            trans.__abortTransaction(createDOMException('AbortError', 'The connection was force-closed: ' + (me.__forcedMessage || '')));
+        });
+    }
 };
 
 /**
@@ -213,21 +267,10 @@ IDBDatabase.prototype.transaction = function (storeNames /* , mode */) {
 // Todo __forceClose: Add tests for `__forceClose`
 IDBDatabase.prototype.__forceClose = function (msg) {
     const me = this;
+    me.__forced = true;
+    me.__forcedMessage = msg;
+    me.__forceClosePending = true;
     me.close();
-    let ct = 0;
-    me.__transactions.forEach(function (trans) {
-        trans.on__abort = function () {
-            ct++;
-            if (ct === me.__transactions.length) {
-                // Todo __forceClose: unblock any pending `upgradeneeded` or `deleteDatabase` calls
-                const evt = createEvent('close');
-                setTimeout(() => {
-                    me.dispatchEvent(evt);
-                });
-            }
-        };
-        trans.__abortTransaction(createDOMException('AbortError', 'The connection was force-closed: ' + (msg || '')));
-    });
 };
 
 listeners.forEach((listener) => {

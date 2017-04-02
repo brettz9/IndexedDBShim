@@ -469,6 +469,10 @@ they were actually changes since a more recent version on `master`.
     closed check, and `NotFoundError` object store check); `TypeError` mode
     check per newly corrected spec behavior, to follow all other exception
     checks
+- Enhancement: For Node, utilize underlying SQLite3 `close` listener to wait
+    for genuine closing before reporting `close` event (#295)
+- Enhancement: For Node, treat any underlying SQLite3 `close` errors as force
+    close operations
 - Repo files: Rename test folders for ease in distinguishing
 - Optimize: Only retrieve required SQLite columns
 - Optimize: Have `IDBObjectStore` and `IDBIndex`'s `get` and
