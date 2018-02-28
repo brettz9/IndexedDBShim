@@ -9,6 +9,9 @@ const {goodFiles, badFiles, notRunning, timeout, excludedWorkers, excludedNormal
 const vm = require('vm');
 const jsdom = require('jsdom');
 const {JSDOM} = jsdom;
+
+const implSymbol = require('jsdom/lib/jsdom/living/generated/utils').implSymbol;
+
 const CY = require('cyclonejs'); // Todo: Replace this with Sca (but need to make requireable)
 const Worker = require('./webworker/webworker'); // Todo: We could export this `Worker` publicly for others looking for a Worker polyfill with IDB support
 const XMLHttpRequestConstr = require('xmlhttprequest');
@@ -388,12 +391,15 @@ function readAndEvaluate (jsFiles, initial = '', ending = '', workers = false, i
 
                         const _xhropen = window.XMLHttpRequest.prototype.open;
                         window.XMLHttpRequest.prototype.open = function (method, url, async) {
-                            const match = url.match(/data:(.*);base64,/);
+                            const match = url.match(/data:(.*?)(;base64)?,/);
                             if (match) { // Data URLs not handled by node-XMLHttpRequest
                                 this.status = 200;
                                 this.send = function () {};
                                 this.responseType = match[1] || '';
-                                this.responseText = Buffer.from(url.slice(match[0].length), 'base64').toString('utf8');
+                                this.responseText = match[2]
+                                    ? Buffer.from(url.slice(match[0].length), 'base64').toString('utf8')
+                                    : url.slice(match[0].length);
+                                // : Buffer.from(url.slice(match[0].length), 'utf-16le').toString('utf8');
                                 return;
                             }
                             return _xhropen.call(this, method, url, async);
@@ -461,6 +467,8 @@ function readAndEvaluate (jsFiles, initial = '', ending = '', workers = false, i
                                 return new Date(this.lastModified);
                             }
                         });
+
+                        window.implSymbol = implSymbol;
 
                         shimNS.window = window;
 

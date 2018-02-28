@@ -18,6 +18,7 @@
     Object, Function
     */
     const nonEnumerables = [
+        'implSymbol',
         'Blob', 'File', 'DOMException', 'Event', 'CustomEvent', 'EventTarget', 'DOMStringList', 'URL',
         'Window', 'Node', 'Document', 'DOMImplementation', 'DocumentFragment', 'ProcessingInstruction', 'DocumentType', 'Element', 'Attr', 'CharacterData', 'Text', 'Comment', 'NodeIterator', 'TreeWalker', 'NodeFilter', 'NodeList', 'HTMLCollection', 'DOMTokenList'
     ]; // These are needed by IndexedDB tests

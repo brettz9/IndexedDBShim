@@ -77,7 +77,7 @@ See <https://github.com/axemclion/IndexedDBShim/issues/286>.
 7. NODE ISSUE-RELATED
 
 - `wasm-module-value.js': We do not have `WebAssembly` polyfilled (and isn't working in Chrome 62 to test)
-- `idb-binary-key-detached.js` - Requires `ArrayBuffer.transfer` but not available in Node; see https://github.com/tmpvar/jsdom/issues/1838 and https://github.com/axemclion/IndexedDBShim/issues/283
+- `idb-binary-key-detached.js` - Requires `ArrayBuffer.transfer` but not available in Node; see https://github.com/tmpvar/jsdom/issues/1838 , https://github.com/tc39/proposals/blob/master/stage-0-proposals.md , and https://github.com/axemclion/IndexedDBShim/issues/283
 
 // Passing no argument to `node-idb-test.js` will test all of the IndexedDB
 //   tests including some worker tests, but only those within the
