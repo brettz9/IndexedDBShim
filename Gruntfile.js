@@ -67,7 +67,7 @@ module.exports = function (grunt) {
             unicodeNode: {
                 options: {
                     transform: [['babelify', babelNodeOptions]],
-                    exclude: ['websql/custom', 'websql/lib/sqlite/SQLiteDatabase'],
+                    exclude: ['websql/custom', 'websql/lib/sqlite/SQLiteDatabase', 'websql/BetterSQLiteDatabase'],
                     // Avoid `window` checking
                     browserifyOptions: {
                         debug: true,
@@ -125,7 +125,7 @@ module.exports = function (grunt) {
             node: {
                 options: {
                     transform: [['babelify', babelNodeOptions]],
-                    exclude: ['websql/custom', 'websql/lib/sqlite/SQLiteDatabase'],
+                    exclude: ['websql/custom', 'websql/lib/sqlite/SQLiteDatabase', 'websql/BetterSQLiteDatabase'],
                     // Avoid `window` checking
                     browserifyOptions: {
                         debug: true,
