@@ -374,15 +374,26 @@ IDBFactory.prototype.open = function (name /* , version */) {
                     };
 
                     sysdb.transaction(function (systx) {
+                        const transaction = IDBTransaction.__createInstance(req.__result, req.__result.objectStoreNames, 'versionchange');
+                        // Todo: are these two the same?
+                        connection.__upgradeTransaction = req.__result.__versionTransaction = transaction;
+                        req.__transaction.__state = 'inactive';
+
                         function versionSet () {
-                            const e = new IDBVersionChangeEvent('upgradeneeded', {oldVersion, newVersion: version});
-                            req.__result = connection;
-                            connection.__upgradeTransaction = req.__transaction = req.__result.__versionTransaction = IDBTransaction.__createInstance(req.__result, req.__result.objectStoreNames, 'versionchange');
-                            req.__done = true;
+                            req.__processed = true;
 
                             req.transaction.__addNonRequestToTransactionQueue(function onupgradeneeded (tx, args, finished, error) {
+                                // Todo: Queue a task for all of the following
+                                req.__result = connection;
+                                req.__transaction = transaction;
+
+                                req.__done = true;
+                                req.__transaction.__state = 'active';
+
+                                const e = new IDBVersionChangeEvent('upgradeneeded', {oldVersion, newVersion: version});
                                 req.dispatchEvent(e);
 
+                                req.__transaction.__state = 'inactive';
                                 if (e.__legacyOutputDidListenersThrowError) {
                                     logError('Error', 'An error occurred in an upgradeneeded handler attached to request chain', e.__legacyOutputDidListenersThrowError); // We do nothing else with this error as per spec
                                     req.transaction.__abortTransaction(createDOMException('AbortError', 'A request was aborted.'));
@@ -413,6 +424,7 @@ IDBFactory.prototype.open = function (name /* , version */) {
                                 req.__transaction = null;
                                 // `readyState` and `result` will be reset anyways by `dbCreateError` but we follow spec.
                                 req.__result = undefined;
+                                req.__processed = false;
                                 req.__done = false;
 
                                 connection.close();
@@ -601,6 +613,7 @@ IDBFactory.prototype.deleteDatabase = function (name) {
     let version = 0;
 
     let sysdbFinishedCbDelete = function (err, cb) {
+        me.__processed = true;
         cb(err);
     };
 

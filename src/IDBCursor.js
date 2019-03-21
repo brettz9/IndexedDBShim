@@ -399,7 +399,8 @@ IDBCursor.prototype.__continueFinish = function (key, primaryKey, advanceState) 
     const me = this;
     const recordsToPreloadOnContinue = me.__advanceCount || CFG.cursorPreloadPackSize || 100;
     me.__gotValue = false;
-    me.__request.__done = false;
+    me.__req.__processed = false;
+    me.__req.__done = false;
 
     me.__store.transaction.__pushToQueue(me.__request, function cursorContinue (tx, args, success, error, executeNextRequest) {
         function triggerSuccess (k, val, primKey) {
